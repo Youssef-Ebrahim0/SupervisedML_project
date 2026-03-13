@@ -1,0 +1,11 @@
+﻿*.csv
+*.tsv
+*.xls
+*.xlsx
+*.parquet
+*.feather
+*.pickle
+*.pkl
+data/
+datasets/
+.ipynb_checkpoints/
