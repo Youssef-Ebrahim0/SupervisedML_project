@@ -378,3 +378,4 @@ if st.sidebar.checkbox("Show Deployment Instructions"):
     2. Install requirements:
     ```bash
     pip install -r requirements.txt
+""")
