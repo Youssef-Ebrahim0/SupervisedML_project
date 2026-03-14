@@ -14,7 +14,7 @@ warnings.filterwarnings('ignore')
 # Page configuration
 st.set_page_config(
     page_title="CharityML Donor Predictor",
-    page_icon="💝",
+    page_icon=":heart:",
     layout="wide",
     initial_sidebar_state="expanded"
 )
@@ -86,7 +86,7 @@ st.markdown("""
 # Title with charity focus
 st.markdown("""
     <div class="main-header">
-        <h1>💝 CharityML Donor Prediction Tool</h1>
+        <h1>CharityML Donor Prediction Tool</h1>
         <p style="font-size: 1.2rem;">Help us identify potential donors to reduce mailing costs and increase fundraising efficiency</p>
     </div>
 """, unsafe_allow_html=True)
@@ -94,7 +94,7 @@ st.markdown("""
 # Charity explanation
 st.markdown("""
     <div class="charity-box">
-        <h3>🎯 Our Mission</h3>
+        <h3>Our Mission</h3>
         <p>CharityML is a fictitious charity organization in Silicon Valley that provides financial support 
         for people eager to learn machine learning. After analyzing 32,000 letters, we discovered that 
         <strong>every donation came from someone making more than $50,000 annually</strong>.</p>
@@ -107,7 +107,7 @@ st.markdown("""
 # Sidebar
 with st.sidebar:
     st.image("https://img.icons8.com/color/96/000000/charity.png", width=100)
-    st.header("📊 Impact Calculator")
+    st.header("Impact Calculator")
     
     # Calculate potential savings
     st.subheader("Potential Impact")
@@ -120,7 +120,7 @@ with st.sidebar:
     if 'prediction' in st.session_state:
         st.info(f"""
         **Current Prediction:** 
-        {'💰 Potential Donor' if st.session_state.prediction == 1 else '💵 Not Likely Donor'}
+        {'Potential Donor' if st.session_state.prediction == 1 else 'Not Likely Donor'}
         """)
     
     st.header("About")
@@ -135,76 +135,37 @@ with st.sidebar:
     **F1 Score:** 0.73
     
     By targeting only likely donors, we can:
-    - 📉 Reduce mailing costs by 75%
-    - 📈 Increase donation yield
-    - 🎯 Focus resources effectively
+    * Reduce mailing costs by 75%
+    * Increase donation yield
+    * Focus resources effectively
     """)
     
     st.header("Feature Importance")
     st.markdown("""
     Top factors that indicate a potential donor:
-    1. **💰 Capital Gains** - Investment income
-    2. **💍 Married** - Married-civ-spouse
-    3. **📅 Age** - Older individuals
-    4. **🎓 Education** - Higher education
-    5. **💑 Relationship** - Husband/Wife
+    1. **Capital Gains** - Investment income
+    2. **Married** - Married-civ-spouse
+    3. **Age** - Older individuals
+    4. **Education** - Higher education
+    5. **Relationship** - Husband/Wife
     """)
 
 # Load model function
-st.cache_resource
+@st.cache_resource
 def load_model():
     """Load the saved model from saved_models directory"""
     try:
         model_path = 'best_xgb_model.pkl'
         
         if os.path.exists(model_path):
-            # Load the model with error handling for XGBoost version compatibility
-            try:
-                model = joblib.load(model_path)
-                st.sidebar.success("✅ Model loaded successfully!")
-                return model
-            except Exception as e:
-                if 'use_label_encoder' in str(e):
-                    st.sidebar.warning("⚠️ XGBoost version compatibility issue. Attempting to fix...")
-                    
-                    # Alternative loading method for XGBoost models
-                    import xgboost as xgb
-                    
-                    # Load the model parameters and rebuild without use_label_encoder
-                    with open(model_path, 'rb') as f:
-                        model_data = joblib.load(f)
-                    
-                    # If it's an XGBoost model, try to recreate it without use_label_encoder
-                    if hasattr(model_data, 'get_params'):
-                        params = model_data.get_params()
-                        # Remove problematic parameter
-                        if 'use_label_encoder' in params:
-                            del params['use_label_encoder']
-                        
-                        # Get the booster if available
-                        if hasattr(model_data, 'get_booster'):
-                            booster = model_data.get_booster()
-                            # Create new model with same parameters
-                            model = xgb.XGBClassifier(**params)
-                            model._Booster = booster
-                            # Copy other attributes
-                            if hasattr(model_data, 'classes_'):
-                                model.classes_ = model_data.classes_
-                            if hasattr(model_data, '_le'):
-                                model._le = model_data._le
-                            st.sidebar.success("✅ Model fixed and loaded successfully!")
-                            return model
-                    
-                    st.sidebar.error("❌ Could not fix model automatically")
-                    return None
-                else:
-                    st.sidebar.error(f"❌ Error loading model: {str(e)}")
-                    return None
+            model = joblib.load(model_path)
+            st.sidebar.success(" Model loaded successfully!")
+            return model
         else:
-            st.sidebar.warning("⚠️ Model file not found. Using demo mode.")
+            st.sidebar.warning(" Model file not found. Using demo mode.")
             return None
     except Exception as e:
-        st.sidebar.error(f"❌ Error loading model: {str(e)}")
+        st.sidebar.error(f" Error loading model: {str(e)}")
         return None
 
 # Load model
@@ -214,11 +175,11 @@ model = load_model()
 col1, col2 = st.columns([2, 1])
 
 with col1:
-    st.subheader("📋 Potential Donor Information Form")
+    st.subheader("Potential Donor Information Form")
     st.markdown("*Fill out the form below to determine if this person is likely to be a donor (income > $50K)*")
     
     # Create tabs for better organization
-    tab1, tab2, tab3 = st.tabs(["👤 Demographics", "💼 Employment", "💰 Financial"])
+    tab1, tab2, tab3 = st.tabs(["Demographics", "Employment", "Financial"])
     
     with tab1:
         col_d1, col_d2 = st.columns(2)
@@ -339,37 +300,24 @@ def mock_prediction(age, hours, capital_gain, education_num, marital_status):
 
 # Prediction function
 def predict_income(input_df):
-    """
-    Make prediction using the trained model with better error handling
-    """
+    """Make prediction using trained model"""
     if model is not None:
         try:
-            # Preprocess the input data
             processed_df = preprocess_input(input_df)
-            
-            # Try to make prediction with error handling
-            try:
-                prediction = model.predict(processed_df)[0]
-                probability = model.predict_proba(processed_df)[0]
-                return prediction, probability, []
-            except AttributeError as e:
-                if 'use_label_encoder' in str(e):
-                    st.error("""
-                    ⚠️ **XGBoost Version Compatibility Issue**
-                    
-                    The model was saved with an older version of XGBoost. 
-                    Please try one of these solutions:
-                    
-                    1. **Retrain the model** with your current XGBoost version:
-                       ```python
-                       # In your notebook, after tuning
-                       best_xgb_model = grid_search_xgb.best_estimator_
-                       # Save without the problematic parameter
-                       joblib.dump(best_xgb_model, 'best_xgb_model_fixed.pkl')
+            prediction = model.predict(processed_df)[0]
+            probability = model.predict_proba(processed_df)[0]
+            return prediction, probability, []
+        except Exception as e:
+            st.error(f"Prediction error: {str(e)}")
+            return None, None, []
+    else:
+        # Demo mode
+        return mock_prediction(age, hours_per_week, capital_gain, 
+                              education_num, marital_status)
 
 # Prediction button
 with col1:
-    if st.button("🎯 Identify Donor Potential", type="primary", use_container_width=True):
+    if st.button("Identify Donor Potential", type="primary", use_container_width=True):
         
         # Create input dataframe
         input_data = pd.DataFrame([[
@@ -387,12 +335,12 @@ with col1:
         
         if prediction is not None:
             # Display prediction with charity context
-            st.markdown("### 📊 Donor Potential Analysis")
+            st.markdown("### Donor Potential Analysis")
             
             if prediction == 1:
                 st.markdown(f"""
                     <div class="prediction-box high-income">
-                        💝 LIKELY DONOR<br>
+                        <strong>LIKELY DONOR</strong><br>
                         <span style="font-size: 1rem;">Income > $50K - Should receive fundraising letter</span><br>
                         <span style="font-size: 0.9rem;">Confidence: {probability[1]:.1%}</span>
                     </div>
@@ -401,9 +349,9 @@ with col1:
                 # Calculate potential savings
                 st.markdown("""
                 <div class="stats-box">
-                    <h4>📈 Impact Analysis</h4>
-                    <p>✅ This person should receive a fundraising letter</p>
-                    <p>💵 By targeting only likely donors, we save $0.65 per avoided letter</p>
+                    <h4>Impact Analysis</h4>
+                    <p> This person should receive a fundraising letter</p>
+                    <p> By targeting only likely donors, we save $0.65 per avoided letter</p>
                 </div>
                 """, unsafe_allow_html=True)
                 
@@ -411,7 +359,7 @@ with col1:
             else:
                 st.markdown(f"""
                     <div class="prediction-box low-income">
-                        💔 NOT A DONOR<br>
+                        <strong>NOT A DONOR</strong><br>
                         <span style="font-size: 1rem;">Income ≤ $50K - Should NOT receive fundraising letter</span><br>
                         <span style="font-size: 0.9rem;">Confidence: {probability[0]:.1%}</span>
                     </div>
@@ -420,9 +368,9 @@ with col1:
                 # Calculate potential savings
                 st.markdown("""
                 <div class="stats-box">
-                    <h4>💰 Savings Analysis</h4>
-                    <p>✅ By skipping this person, we save <strong>$0.65</strong> in mailing costs</p>
-                    <p>🎯 Our targeting algorithm prevents wasting resources on non-donors</p>
+                    <h4>Savings Analysis</h4>
+                    <p> By skipping this person, we save <strong>$0.65</strong> in mailing costs</p>
+                    <p> Our targeting algorithm prevents wasting resources on non-donors</p>
                 </div>
                 """, unsafe_allow_html=True)
             
@@ -435,7 +383,7 @@ with col1:
                 st.info(f"**Key Factors:** {', '.join(reasons)}")
 
 with col2:
-    st.subheader("📈 Campaign Impact Calculator")
+    st.subheader("Campaign Impact Calculator")
     
     # Interactive impact calculator
     st.markdown("### Calculate Your Savings")
@@ -457,10 +405,10 @@ with col2:
     with col_m3:
         st.metric("Letters Saved", f"{num_letters - targeted_letters:,}")
     
-    st.markdown(f"### 💰 You save **${savings:,.0f}** by targeting only likely donors!")
+    st.markdown(f"### You save **${savings:,.0f}** by targeting only likely donors!")
     
     # Model performance
-    st.markdown("### 🎯 Model Performance")
+    st.markdown("### Model Performance")
     st.markdown("""
     <div class="feature-importance">
         <h4>Donor Prediction Metrics</h4>
@@ -478,23 +426,23 @@ with col2:
     <div class="feature-importance">
         <h4>Top Donor Indicators</h4>
         <div style="margin: 10px 0;">
-            <div>💰 Capital Gains <span style="float: right;">14.0%</span></div>
+            <div>Capital Gains <span style="float: right;">14.0%</span></div>
             <progress value="14" max="100" style="width: 100%; height: 10px;"></progress>
         </div>
         <div style="margin: 10px 0;">
-            <div>💍 Married <span style="float: right;">11.6%</span></div>
+            <div>Married <span style="float: right;">11.6%</span></div>
             <progress value="11.6" max="100" style="width: 100%; height: 10px;"></progress>
         </div>
         <div style="margin: 10px 0;">
-            <div>📅 Age <span style="float: right;">10.2%</span></div>
+            <div>Age <span style="float: right;">10.2%</span></div>
             <progress value="10.2" max="100" style="width: 100%; height: 10px;"></progress>
         </div>
         <div style="margin: 10px 0;">
-            <div>🎓 Education Years <span style="float: right;">9.2%</span></div>
+            <div>Education Years <span style="float: right;">9.2%</span></div>
             <progress value="9.2" max="100" style="width: 100%; height: 10px;"></progress>
         </div>
         <div style="margin: 10px 0;">
-            <div>💑 Relationship (Husband) <span style="float: right;">7.5%</span></div>
+            <div>Relationship (Husband) <span style="float: right;">7.5%</span></div>
             <progress value="7.5" max="100" style="width: 100%; height: 10px;"></progress>
         </div>
     </div>
@@ -506,12 +454,12 @@ st.markdown("""
     <div style="text-align: center; color: #6c757d; font-size: 0.9rem;">
         <p><strong>CharityML</strong> - Helping people learn machine learning since 2024</p>
         <p>By using this tool, we can reduce mailing costs by 75% while maintaining donation yield.</p>
-        <p>💝 Every dollar saved goes directly to funding machine learning education! 💝</p>
+        <p>Every dollar saved goes directly to funding machine learning education!</p>
     </div>
 """, unsafe_allow_html=True)
 
 # Debug section (hidden by default)
-with st.sidebar.expander("🔧 Technical Debug"):
+with st.sidebar.expander("Technical Debug"):
     st.write("Model loaded:", model is not None)
     st.write("Model path:", 'best_xgb_model.pkl')
     if model is not None:
