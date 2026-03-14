@@ -226,55 +226,47 @@ def load_model_and_preprocessors():
 model, preprocessors = load_model_and_preprocessors()
 
 def preprocess_input(input_df):
-    """Preprocess the input data to match training format"""
+    """Preprocess input to match training format"""
+
     try:
-        # If we have preprocessors from training, use them
-        if preprocessors is not None:
-            if 'encoder' in preprocessors:
-                # Get categorical columns
-                categorical_cols = ['workclass', 'education_level', 'marital-status', 
-                                  'occupation', 'relationship', 'race', 'sex', 'native-country']
-                
-                # Apply encoding
-                for col in categorical_cols:
-                    if col in input_df.columns:
-                        # Handle unknown categories
-                        input_df[col] = input_df[col].astype('category')
-                        
-            if 'scaler' in preprocessors:
-                # Scale numerical features if scaler exists
-                numerical_cols = ['age', 'education-num', 'capital-gain', 'capital-loss', 'hours-per-week']
-                input_df[numerical_cols] = preprocessors['scaler'].transform(input_df[numerical_cols])
-        
-        # Alternative: convert categorical columns to category dtype
-        categorical_cols = ['workclass', 'education_level', 'marital-status', 
-                          'occupation', 'relationship', 'race', 'sex', 'native-country']
-        
-        for col in categorical_cols:
-            if col in input_df.columns:
-                input_df[col] = input_df[col].astype('category')
-        
-        return input_df
-        
+
+        # Convert categorical variables to dummy variables
+        df = pd.get_dummies(input_df)
+
+        # Align columns with model features
+        if hasattr(model, "feature_names_in_"):
+
+            required_cols = model.feature_names_in_
+
+            for col in required_cols:
+                if col not in df.columns:
+                    df[col] = 0
+
+            df = df[required_cols]
+
+        return df
+
     except Exception as e:
         st.warning(f"Preprocessing warning: {e}")
         return input_df
 
 def predict_income(input_df):
     """Make prediction with proper preprocessing"""
+
     try:
-        # Preprocess the input
+
         processed_df = preprocess_input(input_df.copy())
-        
-        # Make prediction
+
         prediction = model.predict(processed_df)
         probability = model.predict_proba(processed_df)
-        
+
         return prediction[0], probability[0]
-        
+
     except Exception as e:
+
         st.error(f"Prediction error: {e}")
         st.info("💡 Tip: Make sure all fields are filled correctly")
+
         return None, None
 
 # ============================================
