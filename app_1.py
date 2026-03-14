@@ -17,97 +17,99 @@ import xgboost as xgb
 st.sidebar.write(f"XGBoost version: {xgb.__version__}")
 
 # ============================================
-# COMPREHENSIVE XGBOOST COMPATIBILITY FIX
+# XGBOOST MODEL WRAPPER (MOST ROBUST SOLUTION)
 # ============================================
 
-# Patch 1: Handle use_label_encoder
-if not hasattr(xgb.XGBClassifier, "use_label_encoder"):
-    xgb.XGBClassifier.use_label_encoder = False
-
-# Patch 2: Create a safe model loader that handles missing attributes
-def fix_xgboost_model(model):
-    """Add missing attributes to make older models compatible with newer XGBoost"""
-    if model is None:
-        return model
+class XGBoostCompatibilityWrapper:
+    """
+    A wrapper class that makes older XGBoost models compatible with newer versions.
+    This handles all missing attributes and method calls gracefully.
+    """
     
-    # List of attributes that might be missing in newer XGBoost
-    missing_attrs = {
-        'gpu_id': -1,
-        'n_gpus': 0,
-        'predictor': 'cpu_predictor',
-        'enable_categorical': False,
-        'use_rmm': False,
-        'max_cat_to_onehot': 4,
-        'cat_priority': False,
-    }
+    def __init__(self, model):
+        self.model = model
+        self.gpu_id = -1
+        self.n_gpus = 0
+        self.predictor = 'cpu_predictor'
+        self.enable_categorical = False
+        self.use_rmm = False
+        self.max_cat_to_onehot = 4
+        self.cat_priority = False
+        
+    def __getattr__(self, name):
+        """Forward any attribute access to the underlying model"""
+        return getattr(self.model, name)
     
-    # Add missing attributes to the model
-    for attr, default_value in missing_attrs.items():
-        if not hasattr(model, attr):
-            setattr(model, attr, default_value)
+    def get_params(self, deep=True):
+        """Override get_params to include our added attributes"""
+        params = {}
+        if hasattr(self.model, 'get_params'):
+            params = self.model.get_params(deep)
+        
+        # Add our attributes
+        params['gpu_id'] = self.gpu_id
+        params['n_gpus'] = self.n_gpus
+        params['predictor'] = self.predictor
+        params['enable_categorical'] = self.enable_categorical
+        params['use_rmm'] = self.use_rmm
+        params['max_cat_to_onehot'] = self.max_cat_to_onehot
+        params['cat_priority'] = self.cat_priority
+        
+        return params
     
-    # Fix the booster if it exists
-    if hasattr(model, '_Booster') and model._Booster is not None:
-        booster = model._Booster
-        for attr, default_value in missing_attrs.items():
-            if not hasattr(booster, attr):
-                setattr(booster, attr, default_value)
+    def get_xgb_params(self):
+        """Override get_xgb_params to include our attributes"""
+        params = {}
+        if hasattr(self.model, 'get_xgb_params'):
+            params = self.model.get_xgb_params()
+        
+        # Add our attributes
+        params['gpu_id'] = self.gpu_id
+        params['n_gpus'] = self.n_gpus
+        params['predictor'] = self.predictor
+        params['enable_categorical'] = self.enable_categorical
+        params['use_rmm'] = self.use_rmm
+        params['max_cat_to_onehot'] = self.max_cat_to_onehot
+        params['cat_priority'] = self.cat_priority
+        
+        return params
     
-    return model
-
-# Patch 3: Monkey patch joblib.load to automatically fix XGBoost models
-original_load = joblib.load
-
-def patched_load(*args, **kwargs):
-    """Load and automatically fix XGBoost models"""
-    obj = original_load(*args, **kwargs)
+    def _can_use_inplace_predict(self):
+        """Override to always return False to avoid GPU-related issues"""
+        return False
     
-    # Check if it's an XGBoost model and fix it
-    if obj is not None:
-        obj_type = str(type(obj))
-        if 'xgboost' in obj_type.lower() or 'xgb' in obj_type.lower():
-            obj = fix_xgboost_model(obj)
-            st.sidebar.info("✅ Applied XGBoost compatibility fixes")
+    def predict(self, X, **kwargs):
+        """Wrapper for predict method"""
+        return self.model.predict(X, **kwargs)
     
-    return obj
-
-# Replace joblib.load with our patched version
-joblib.load = patched_load
+    def predict_proba(self, X, **kwargs):
+        """Wrapper for predict_proba method"""
+        return self.model.predict_proba(X, **kwargs)
 
 # ============================================
-# MODEL LOADING
+# MODEL LOADING FUNCTION
 # ============================================
 
 @st.cache_resource
 def load_model():
-    """Load the saved model from saved_models directory"""
+    """Load the saved model and wrap it for compatibility"""
     try:
         model_path = 'best_xgb_model.pkl'
         
         if os.path.exists(model_path):
-            # Load the model (our patched load will handle fixes)
-            model = joblib.load(model_path)
+            st.sidebar.info(f"Loading model from: {model_path}")
             
-            # Verify the model loaded correctly
-            if model is not None:
-                st.sidebar.success("✅ Model loaded successfully!")
-                
-                # Test the model with a dummy prediction to ensure it works
-                try:
-                    test_input = np.zeros((1, 10))  # Dummy input
-                    # Don't actually predict, just check if model has predict method
-                    if hasattr(model, 'predict'):
-                        st.sidebar.info("✅ Model is ready for predictions")
-                    return model
-                except Exception as e:
-                    st.sidebar.warning(f"⚠️ Model loaded but may have issues: {str(e)}")
-                    return model
-            else:
-                st.sidebar.warning("⚠️ Model loaded but is None")
-                return None
+            # Load the raw model
+            raw_model = joblib.load(model_path)
+            
+            # Wrap it with our compatibility wrapper
+            wrapped_model = XGBoostCompatibilityWrapper(raw_model)
+            
+            st.sidebar.success("✅ Model loaded and wrapped for compatibility!")
+            return wrapped_model
         else:
             st.sidebar.error(f"❌ Model file not found at: {model_path}")
-            st.sidebar.info("Please ensure your model is saved as 'saved_models/best_xgb_model.pkl'")
+            st.sidebar.info("Please ensure your model is saved as 'best_xgb_model.pkl'")
             return None
     except Exception as e:
         st.sidebar.error(f"❌ Error loading model: {str(e)}")
@@ -144,6 +146,8 @@ def predict_income(input_df):
             # Preprocess the input data
             processed_df = preprocess_input(input_df)
             
+            st.write("Debug - Input shape:", processed_df.shape)
+            
             # Make prediction
             prediction = model.predict(processed_df)[0]
             probability = model.predict_proba(processed_df)[0]
@@ -152,7 +156,7 @@ def predict_income(input_df):
             
         except Exception as e:
             st.error(f"Prediction error: {str(e)}")
-            st.exception(e)  # This will show the full error for debugging
+            st.exception(e)
             return None, None
     else:
         st.error("Model not loaded. Please check the model file path.")
