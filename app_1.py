@@ -11,6 +11,14 @@ import sys
 import warnings
 warnings.filterwarnings('ignore')
 
+# Import XGBoost and add compatibility patch
+import xgboost as xgb
+
+# Compatibility patch for models trained with older XGBoost versions
+# This prevents the 'use_label_encoder' attribute error
+if not hasattr(xgb.XGBClassifier, "use_label_encoder"):
+    xgb.XGBClassifier.use_label_encoder = False
+
 # Page configuration
 st.set_page_config(
     page_title="CharityML Donor Predictor",
