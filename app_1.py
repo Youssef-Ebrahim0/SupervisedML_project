@@ -61,7 +61,7 @@ def patch_xgb_model(model):
 def load_model():
     try:
 
-        model = joblib.load("saved_models/best_xgb_model.pkl")
+        model = joblib.load("best_xgb_model.pkl")
 
         model = patch_xgb_model(model)
 
