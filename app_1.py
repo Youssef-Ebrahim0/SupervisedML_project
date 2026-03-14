@@ -562,78 +562,76 @@ with col1:
 with col2:
     st.markdown("""
     <div class="form-section">
-        <h3>📊 Model Performance</h3>
+        <h3 style="margin-bottom: 1rem;">📊 Model Performance</h3>
     </div>
     """, unsafe_allow_html=True)
     
-    # Create metric cards
-    st.markdown("""
-    <div class="metric-card">
-        <h3>Accuracy</h3>
-        <p class="value">87.4%</p>
+    # Create a single row of compact metric cards
+    metrics_html = """
+    <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.5rem; margin-bottom: 1rem;">
+        <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
+                    padding: 0.75rem; 
+                    border-radius: 8px; 
+                    text-align: center;
+                    box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+            <div style="color: rgba(255,255,255,0.8); font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.5px;">Accuracy</div>
+            <div style="color: white; font-size: 1.5rem; font-weight: 700; line-height: 1.2;">87.4%</div>
+        </div>
+        <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
+                    padding: 0.75rem; 
+                    border-radius: 8px; 
+                    text-align: center;
+                    box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+            <div style="color: rgba(255,255,255,0.8); font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.5px;">Precision</div>
+            <div style="color: white; font-size: 1.5rem; font-weight: 700; line-height: 1.2;">81%</div>
+        </div>
+        <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
+                    padding: 0.75rem; 
+                    border-radius: 8px; 
+                    text-align: center;
+                    box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+            <div style="color: rgba(255,255,255,0.8); font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.5px;">Recall</div>
+            <div style="color: white; font-size: 1.5rem; font-weight: 700; line-height: 1.2;">67%</div>
+        </div>
+        <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
+                    padding: 0.75rem; 
+                    border-radius: 8px; 
+                    text-align: center;
+                    box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+            <div style="color: rgba(255,255,255,0.8); font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.5px;">F1 Score</div>
+            <div style="color: white; font-size: 1.5rem; font-weight: 700; line-height: 1.2;">0.73</div>
+        </div>
     </div>
-    """, unsafe_allow_html=True)
+    """
     
-    st.markdown("""
-    <div class="metric-card">
-        <h3>Precision</h3>
-        <p class="value">81%</p>
-    </div>
-    """, unsafe_allow_html=True)
+    st.markdown(metrics_html, unsafe_allow_html=True)
     
+    # Add compact interpretation guide
     st.markdown("""
-    <div class="metric-card">
-        <h3>Recall</h3>
-        <p class="value">67%</p>
-    </div>
-    """, unsafe_allow_html=True)
-    
-    st.markdown("""
-    <div class="metric-card">
-        <h3>F1 Score</h3>
-        <p class="value">0.73</p>
-    </div>
-    """, unsafe_allow_html=True)
-    
-    # Add interpretation guide
-    st.markdown("""
-    <div class="form-section" style="margin-top: 1rem;">
-        <h3>📈 How to Interpret</h3>
-        <div style="background: white; padding: 1rem; border-radius: 8px;">
-            <p><span style="color: #28a745;">✓</span> <strong>Likely Donor</strong> - Income >$50K</p>
-            <p><span style="color: #dc3545;">✗</span> <strong>Not a Donor</strong> - Income ≤$50K</p>
-            <p style="font-size: 0.9rem; color: #666; margin-top: 0.5rem;">
-                Higher confidence scores indicate more reliable predictions.
-            </p>
+    <div style="background: #f8f9fa; padding: 1rem; border-radius: 8px; border-left: 4px solid #667eea; margin: 0.5rem 0;">
+        <div style="display: flex; align-items: center; gap: 1rem; font-size: 0.9rem;">
+            <div style="display: flex; align-items: center;">
+                <span style="color: #28a745; font-size: 1.2rem; margin-right: 0.25rem;">✓</span>
+                <span><strong>Donor</strong> >$50K</span>
+            </div>
+            <div style="display: flex; align-items: center;">
+                <span style="color: #dc3545; font-size: 1.2rem; margin-right: 0.25rem;">✗</span>
+                <span><strong>Non-Donor</strong> ≤$50K</span>
+            </div>
         </div>
     </div>
     """, unsafe_allow_html=True)
     
-    # Add feature importance note
+    # Add compact feature importance
     st.markdown("""
-    <div class="form-section" style="margin-top: 1rem;">
-        <h3>🔑 Key Factors</h3>
-        <div style="background: white; padding: 1rem; border-radius: 8px;">
-            <div class="feature-item">
-                <span class="feature-name">Education Level</span>
-                <span class="feature-value">High Impact</span>
-            </div>
-            <div class="feature-item">
-                <span class="feature-name">Occupation</span>
-                <span class="feature-value">High Impact</span>
-            </div>
-            <div class="feature-item">
-                <span class="feature-name">Hours per Week</span>
-                <span class="feature-value">Medium Impact</span>
-            </div>
-            <div class="feature-item">
-                <span class="feature-name">Capital Gains</span>
-                <span class="feature-value">Medium Impact</span>
-            </div>
-            <div class="feature-item">
-                <span class="feature-name">Age</span>
-                <span class="feature-value">Low Impact</span>
-            </div>
+    <div style="background: #f8f9fa; padding: 1rem; border-radius: 8px; border-left: 4px solid #667eea;">
+        <h4 style="margin: 0 0 0.5rem 0; font-size: 0.9rem; color: #333;">🔑 Key Factors</h4>
+        <div style="display: flex; flex-wrap: wrap; gap: 0.5rem;">
+            <span style="background: white; padding: 0.25rem 0.5rem; border-radius: 12px; font-size: 0.75rem; font-weight: 500; color: #667eea;">Education</span>
+            <span style="background: white; padding: 0.25rem 0.5rem; border-radius: 12px; font-size: 0.75rem; font-weight: 500; color: #667eea;">Occupation</span>
+            <span style="background: white; padding: 0.25rem 0.5rem; border-radius: 12px; font-size: 0.75rem; font-weight: 500; color: #667eea;">Hours/Week</span>
+            <span style="background: white; padding: 0.25rem 0.5rem; border-radius: 12px; font-size: 0.75rem; font-weight: 500; color: #667eea;">Capital Gains</span>
+            <span style="background: white; padding: 0.25rem 0.5rem; border-radius: 12px; font-size: 0.75rem; font-weight: 500; color: #667eea;">Age</span>
         </div>
     </div>
     """, unsafe_allow_html=True)
