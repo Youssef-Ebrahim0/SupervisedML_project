@@ -100,7 +100,7 @@ with st.sidebar:
 def load_model():
     """Load the saved model from saved_models directory"""
     try:
-        model_path = 'saved_models/best_xgb_model.pkl'
+        model_path = 'best_xgb_model.pkl'
         
         if os.path.exists(model_path):
             # Load the model
