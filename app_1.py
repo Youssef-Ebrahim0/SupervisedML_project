@@ -547,7 +547,9 @@ with col1:
             # Display probability gauge
             st.markdown("### Prediction Confidence")
             prob_value = probability[1] if prediction == 1 else probability[0]
-            st.progress(prob_value)
+            confidence = float(max(probability))
+            st.progress(confidence)
+            st.write(f"Confidence: {confidence*100:.1f}%")
             
             # Additional insights
             st.markdown("""
