@@ -12,7 +12,7 @@ import warnings
 warnings.filterwarnings('ignore')
 
 # Import XGBoost and add compatibility patch
-mport xgboost as xgb
+import xgboost as xgb
 
 # Comprehensive compatibility patch for XGBoost models
 # This handles multiple version compatibility issues
