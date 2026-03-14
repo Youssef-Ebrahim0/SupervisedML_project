@@ -151,16 +151,55 @@ with st.sidebar:
     """)
 
 # Load model function
-@st.cache_resource
+st.cache_resource
 def load_model():
     """Load the saved model from saved_models directory"""
     try:
         model_path = 'best_xgb_model.pkl'
         
         if os.path.exists(model_path):
-            model = joblib.load(model_path)
-            st.sidebar.success("✅ Model loaded successfully!")
-            return model
+            # Load the model with error handling for XGBoost version compatibility
+            try:
+                model = joblib.load(model_path)
+                st.sidebar.success("✅ Model loaded successfully!")
+                return model
+            except Exception as e:
+                if 'use_label_encoder' in str(e):
+                    st.sidebar.warning("⚠️ XGBoost version compatibility issue. Attempting to fix...")
+                    
+                    # Alternative loading method for XGBoost models
+                    import xgboost as xgb
+                    
+                    # Load the model parameters and rebuild without use_label_encoder
+                    with open(model_path, 'rb') as f:
+                        model_data = joblib.load(f)
+                    
+                    # If it's an XGBoost model, try to recreate it without use_label_encoder
+                    if hasattr(model_data, 'get_params'):
+                        params = model_data.get_params()
+                        # Remove problematic parameter
+                        if 'use_label_encoder' in params:
+                            del params['use_label_encoder']
+                        
+                        # Get the booster if available
+                        if hasattr(model_data, 'get_booster'):
+                            booster = model_data.get_booster()
+                            # Create new model with same parameters
+                            model = xgb.XGBClassifier(**params)
+                            model._Booster = booster
+                            # Copy other attributes
+                            if hasattr(model_data, 'classes_'):
+                                model.classes_ = model_data.classes_
+                            if hasattr(model_data, '_le'):
+                                model._le = model_data._le
+                            st.sidebar.success("✅ Model fixed and loaded successfully!")
+                            return model
+                    
+                    st.sidebar.error("❌ Could not fix model automatically")
+                    return None
+                else:
+                    st.sidebar.error(f"❌ Error loading model: {str(e)}")
+                    return None
         else:
             st.sidebar.warning("⚠️ Model file not found. Using demo mode.")
             return None
@@ -300,20 +339,33 @@ def mock_prediction(age, hours, capital_gain, education_num, marital_status):
 
 # Prediction function
 def predict_income(input_df):
-    """Make prediction using trained model"""
+    """
+    Make prediction using the trained model with better error handling
+    """
     if model is not None:
         try:
+            # Preprocess the input data
             processed_df = preprocess_input(input_df)
-            prediction = model.predict(processed_df)[0]
-            probability = model.predict_proba(processed_df)[0]
-            return prediction, probability, []
-        except Exception as e:
-            st.error(f"Prediction error: {str(e)}")
-            return None, None, []
-    else:
-        # Demo mode
-        return mock_prediction(age, hours_per_week, capital_gain, 
-                              education_num, marital_status)
+            
+            # Try to make prediction with error handling
+            try:
+                prediction = model.predict(processed_df)[0]
+                probability = model.predict_proba(processed_df)[0]
+                return prediction, probability, []
+            except AttributeError as e:
+                if 'use_label_encoder' in str(e):
+                    st.error("""
+                    ⚠️ **XGBoost Version Compatibility Issue**
+                    
+                    The model was saved with an older version of XGBoost. 
+                    Please try one of these solutions:
+                    
+                    1. **Retrain the model** with your current XGBoost version:
+                       ```python
+                       # In your notebook, after tuning
+                       best_xgb_model = grid_search_xgb.best_estimator_
+                       # Save without the problematic parameter
+                       joblib.dump(best_xgb_model, 'best_xgb_model_fixed.pkl')
 
 # Prediction button
 with col1:
