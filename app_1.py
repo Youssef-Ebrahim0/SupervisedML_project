@@ -3,7 +3,7 @@
 # Predicts whether income exceeds $50K/year based on census data
 
 import streamlit as st
-import pandas aspd
+import pandas as pd
 import numpy as np
 import joblib
 import os
