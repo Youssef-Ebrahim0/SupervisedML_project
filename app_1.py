@@ -12,12 +12,51 @@ import warnings
 warnings.filterwarnings('ignore')
 
 # Import XGBoost and add compatibility patch
-import xgboost as xgb
+mport xgboost as xgb
 
-# Compatibility patch for models trained with older XGBoost versions
-# This prevents the 'use_label_encoder' attribute error
+# Comprehensive compatibility patch for XGBoost models
+# This handles multiple version compatibility issues
+
+# Patch 1: Handle use_label_encoder
 if not hasattr(xgb.XGBClassifier, "use_label_encoder"):
     xgb.XGBClassifier.use_label_encoder = False
+
+# Patch 2: Handle GPU-related attributes
+import functools
+
+def _patch_xgboost_model(model):
+    """Apply patches to an XGBoost model to handle version compatibility"""
+    if hasattr(model, '_Booster'):
+        # Handle gpu_id attribute if missing
+        if not hasattr(model, 'gpu_id'):
+            model.gpu_id = -1
+        
+        # Handle other common missing attributes
+        if not hasattr(model, 'n_gpus'):
+            model.n_gpus = 0
+        if not hasattr(model, 'predictor'):
+            model.predictor = 'cpu_predictor'
+    
+    return model
+
+# Monkey patch the load method to apply fixes
+original_load = joblib.load
+
+def patched_load(*args, **kwargs):
+    model = original_load(*args, **kwargs)
+    # Check if it's an XGBoost model and apply patches
+    if hasattr(model, '_Booster') or 'XGB' in str(type(model)):
+        model = _patch_xgboost_model(model)
+    return model
+
+joblib.load = patched_load
+
+# Suppress warnings
+import warnings
+warnings.filterwarnings('ignore', category=FutureWarning)
+warnings.filterwarnings('ignore', category=UserWarning)
+
+st.sidebar.info("✅ Applied XGBoost compatibility patches")
 
 # Page configuration
 st.set_page_config(
