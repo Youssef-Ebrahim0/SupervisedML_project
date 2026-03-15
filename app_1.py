@@ -4,6 +4,7 @@ import numpy as np
 import pickle
 import xgboost as xgb
 from sklearn.preprocessing import StandardScaler
+import os
 
 # Page config
 st.set_page_config(
@@ -170,7 +171,7 @@ with st.sidebar:
     st.markdown("### 🔑 Top Features")
     st.info("""
     1. Capital Gain
-    2. Marital Status
+    2. Marital Status (Married)
     3. Age
     4. Education Level
     5. Hours per Week
@@ -191,40 +192,48 @@ with st.sidebar:
 @st.cache_resource
 def load_model():
     """Load the saved XGBoost model"""
-    try:
-        model = pickle.load(open("best_xgboost_model.pkl", "rb"))
-        return model
-    except:
-        # Create a default model if file not found
-        model = xgb.XGBClassifier(
-            n_estimators=200,
-            max_depth=6,
-            learning_rate=0.1,
-            subsample=1,
-            random_state=42
-        )
-        return model
+    model_paths = [
+        "best_xgboost_model.pkl",
+        "xgb_income_pipeline.pkl",
+        "xgboost_model.pkl"
+    ]
+    
+    for path in model_paths:
+        if os.path.exists(path):
+            try:
+                model = pickle.load(open(path, "rb"))
+                st.sidebar.success(f"✅ Model loaded from {path}")
+                return model, True
+            except:
+                continue
+    
+    st.sidebar.warning("⚠️ No trained model found. Using rule-based prediction.")
+    return None, False
 
 @st.cache_data
 def load_feature_names():
     """Load feature names used during training"""
-    try:
-        feature_names = pickle.load(open("feature_names.pkl", "rb"))
-        return feature_names
-    except:
-        return None
+    if os.path.exists("feature_names.pkl"):
+        try:
+            feature_names = pickle.load(open("feature_names.pkl", "rb"))
+            return feature_names
+        except:
+            return None
+    return None
 
 @st.cache_resource
 def load_scaler():
     """Load the scaler used during training"""
-    try:
-        scaler = pickle.load(open("scaler.pkl", "rb"))
-        return scaler
-    except:
-        return None
+    if os.path.exists("scaler.pkl"):
+        try:
+            scaler = pickle.load(open("scaler.pkl", "rb"))
+            return scaler
+        except:
+            return None
+    return None
 
 # Load model and preprocessing objects
-model = load_model()
+model, model_loaded = load_model()
 feature_names = load_feature_names()
 scaler = load_scaler()
 
@@ -258,20 +267,67 @@ def align_features(df, target_features):
 def scale_features(df, scaler, num_cols):
     """Scale numerical features"""
     if scaler is not None:
-        df[num_cols] = scaler.transform(df[num_cols])
+        try:
+            df[num_cols] = scaler.transform(df[num_cols])
+        except:
+            # Fallback to approximate scaling
+            scale_features_approx(df, num_cols)
     else:
-        # Approximate standardization if scaler not available
-        mean_dict = {
-            'age': 38.5, 'education-num': 10.1,
-            'capital-gain': 0.5, 'capital-loss': 0.2, 'hours-per-week': 40.9
-        }
-        std_dict = {
-            'age': 13.2, 'education-num': 2.55,
-            'capital-gain': 1.5, 'capital-loss': 1.0, 'hours-per-week': 12.0
-        }
-        for col in num_cols:
-            df[col] = (df[col] - mean_dict[col]) / std_dict[col]
+        scale_features_approx(df, num_cols)
     return df
+
+def scale_features_approx(df, num_cols):
+    """Approximate standardization if scaler not available"""
+    mean_dict = {
+        'age': 38.5, 'education-num': 10.1,
+        'capital-gain': 0.5, 'capital-loss': 0.2, 'hours-per-week': 40.9
+    }
+    std_dict = {
+        'age': 13.2, 'education-num': 2.55,
+        'capital-gain': 1.5, 'capital-loss': 1.0, 'hours-per-week': 12.0
+    }
+    for col in num_cols:
+        if col in df.columns:
+            df[col] = (df[col] - mean_dict[col]) / std_dict[col]
+
+def rule_based_prediction(age, education_num, capital_gain, marital_status, 
+                         occupation, hours_per_week):
+    """Fallback rule-based prediction"""
+    score = 0
+    
+    # Capital gain is strong indicator
+    if capital_gain > 5000:
+        score += 3
+    elif capital_gain > 1000:
+        score += 1
+    
+    # Higher education
+    if education_num >= 13:
+        score += 2
+    elif education_num >= 10:
+        score += 1
+    
+    # Age (prime earning years)
+    if 35 <= age <= 55:
+        score += 1
+    
+    # Married with spouse present
+    if marital_status == 'Married-civ-spouse':
+        score += 2
+    
+    # Hours per week
+    if hours_per_week >= 45:
+        score += 1
+    
+    # Occupation
+    high_income_occ = ['Exec-managerial', 'Prof-specialty', 'Sales']
+    if occupation in high_income_occ:
+        score += 1
+    
+    prediction = 1 if score >= 5 else 0
+    confidence = min(0.5 + score * 0.07, 0.95) if prediction == 1 else max(0.5 - score * 0.07, 0.05)
+    
+    return prediction, confidence
 
 # ============================================
 # MAIN CONTENT
@@ -390,34 +446,34 @@ with col1:
                 input_final = scale_features(input_final, scaler, num_cols)
                 
                 # Step 5: Make prediction
-                if model is not None:
-                    prediction = model.predict(input_final)[0]
-                    probability = model.predict_proba(input_final)[0]
+                if model_loaded and model is not None:
+                    try:
+                        prediction = model.predict(input_final)[0]
+                        probability = model.predict_proba(input_final)[0]
+                        using_ml = True
+                    except:
+                        # Fallback to rule-based if model prediction fails
+                        prediction, confidence = rule_based_prediction(
+                            age, education_num, capital_gain, marital_status, 
+                            occupation, hours_per_week
+                        )
+                        probability = [1-confidence, confidence] if prediction == 0 else [confidence, 1-confidence]
+                        using_ml = False
                 else:
-                    # Fallback to rule-based prediction if model not available
-                    income_score = 0
-                    if capital_gain > 5000:
-                        income_score += 3
-                    elif capital_gain > 1000:
-                        income_score += 1
-                    if education_num >= 13:
-                        income_score += 2
-                    elif education_num >= 10:
-                        income_score += 1
-                    if 35 <= age <= 55:
-                        income_score += 1
-                    if marital_status == 'Married-civ-spouse':
-                        income_score += 2
-                    if hours_per_week >= 45:
-                        income_score += 1
-                    if occupation in ['Exec-managerial', 'Prof-specialty', 'Sales']:
-                        income_score += 1
-                    
-                    prediction = 1 if income_score >= 5 else 0
-                    probability = [0.9, 0.1] if prediction == 0 else [0.1, 0.9]
+                    # Use rule-based prediction
+                    prediction, confidence = rule_based_prediction(
+                        age, education_num, capital_gain, marital_status, 
+                        occupation, hours_per_week
+                    )
+                    probability = [1-confidence, confidence] if prediction == 0 else [confidence, 1-confidence]
+                    using_ml = False
                 
                 # Display results
                 st.markdown("---")
+                
+                if not using_ml:
+                    st.info("ℹ️ Using rule-based prediction (trained model not available)")
+                
                 result_col1, result_col2 = st.columns(2)
                 
                 with result_col1:
@@ -442,8 +498,8 @@ with col1:
                         """)
                         st.balloons()
                     else:
-                        st.error(f"""
-                        ### ❌ Not a Donor
+                        st.info(f"""
+                        ### 📊 Not a Donor
                         **Income:** ≤$50K
                         **Confidence:** {probability[0]*100:.1f}%
                         """)
@@ -561,6 +617,14 @@ with col2:
         </div>
     </div>
     """, unsafe_allow_html=True)
+
+# Show model status in sidebar
+with st.sidebar:
+    st.markdown("---")
+    if model_loaded:
+        st.success("✅ Model Status: Loaded")
+    else:
+        st.warning("⚠️ Model Status: Using Rule-based Prediction")
 
 # ============================================
 # FOOTER
