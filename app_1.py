@@ -20,6 +20,26 @@ st.set_page_config(
 )
 
 # ============================================
+# LOAD MODEL AND PREPROCESSING OBJECTS
+# ============================================
+@st.cache_resource
+def load_model():
+    """Load the saved XGBoost model and preprocessing objects"""
+    try:
+        # Load the saved pipeline
+        pipeline = joblib.load("xgb_income_pipeline.pkl")
+        return pipeline
+    except FileNotFoundError:
+        st.error("Model file 'xgb_income_pipeline.pkl' not found. Please ensure the model is saved in the correct location.")
+        return None
+    except Exception as e:
+        st.error(f"Error loading model: {str(e)}")
+        return None
+
+# Load model at startup
+model_pipeline = load_model()
+
+# ============================================
 # CUSTOM CSS
 # ============================================
 st.markdown("""
@@ -75,24 +95,45 @@ st.markdown("""
         opacity: 0.9;
     }
     
-    .metric-card .value {
-        font-size: 2.5rem;
+    .metric-card .metric-value {
+        font-size: 2rem;
         font-weight: 700;
-        margin: 0;
+    }
+    
+    /* Form section styling */
+    .form-section {
+        background: white;
+        padding: 1.5rem;
+        border-radius: 10px;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        margin-bottom: 1rem;
+    }
+    
+    .form-section h3 {
+        color: #333;
+        margin-bottom: 1rem;
+        font-weight: 600;
+    }
+    
+    /* Info box styling */
+    .info-box {
+        background: #f8f9fa;
+        padding: 1rem;
+        border-radius: 8px;
+        border-left: 4px solid #667eea;
+        margin: 1rem 0;
     }
     
     /* Button styling */
     .stButton > button {
         background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
         color: white;
-        font-weight: 600;
-        padding: 0.75rem 2rem;
         border: none;
-        border-radius: 25px;
+        padding: 0.75rem 1.5rem;
+        font-weight: 600;
+        border-radius: 8px;
         width: 100%;
-        font-size: 1.1rem;
         transition: all 0.3s;
-        margin-top: 1rem;
     }
     
     .stButton > button:hover {
@@ -102,462 +143,229 @@ st.markdown("""
     
     /* Success/Error message styling */
     .stSuccess, .stError {
-        padding: 1.5rem;
-        border-radius: 10px;
-        font-size: 1.2rem;
-        font-weight: 600;
-        text-align: center;
-        animation: slideIn 0.5s;
-    }
-    
-    @keyframes slideIn {
-        from {
-            transform: translateY(-20px);
-            opacity: 0;
-        }
-        to {
-            transform: translateY(0);
-            opacity: 1;
-        }
-    }
-    
-    /* Form section styling */
-    .form-section {
-        background: #f8f9fa;
-        padding: 1.5rem;
-        border-radius: 10px;
-        border-left: 4px solid #667eea;
-        margin-bottom: 1rem;
-    }
-    
-    .form-section h3 {
-        color: #333;
-        margin-bottom: 1rem;
-        font-size: 1.2rem;
-        font-weight: 600;
-    }
-    
-    /* Info box styling */
-    .info-box {
-        background: #e3f2fd;
         padding: 1rem;
         border-radius: 8px;
-        border-left: 4px solid #2196f3;
-        margin: 1rem 0;
+        font-weight: 500;
     }
     
-    /* Feature importance styling */
-    .feature-item {
-        display: flex;
-        justify-content: space-between;
-        padding: 0.5rem;
-        background: white;
-        border-radius: 5px;
-        margin-bottom: 0.5rem;
-    }
-    
-    .feature-name {
-        font-weight: 600;
+    /* Selectbox styling */
+    .stSelectbox label, .stNumberInput label {
+        font-weight: 500;
         color: #333;
     }
     
-    .feature-value {
-        color: #667eea;
-        font-weight: 600;
+    /* Divider styling */
+    hr {
+        margin: 2rem 0;
+        border: none;
+        border-top: 1px solid #e0e0e0;
     }
 </style>
 """, unsafe_allow_html=True)
 
-st.sidebar.write(f"⚙️ XGBoost version: {xgb.__version__}")
-
 # ============================================
-# FIX XGBOOST COMPATIBILITY
-# ============================================
-
-def patch_xgb_model(model):
-    """
-    Add missing attributes to older XGBoost models
-    so they work with newer sklearn versions.
-    """
-    try:
-        if hasattr(model, "named_steps"):
-            for name, step in model.named_steps.items():
-                if "xgb" in str(type(step)).lower():
-                    if not hasattr(step, "gpu_id"):
-                        step.gpu_id = -1
-                    if not hasattr(step, "n_gpus"):
-                        step.n_gpus = 0
-                    if not hasattr(step, "predictor"):
-                        step.predictor = "cpu_predictor"
-        else:
-            if not hasattr(model, "gpu_id"):
-                model.gpu_id = -1
-            if not hasattr(model, "n_gpus"):
-                model.n_gpus = 0
-            if not hasattr(model, "predictor"):
-                model.predictor = "cpu_predictor"
-    except Exception as e:
-        st.warning(f"Model patch warning: {e}")
-    return model
-
-# ============================================
-# LOAD MODEL AND PREPROCESSORS
-# ============================================
-
-@st.cache_resource
-def load_model_and_preprocessors():
-    """Load the trained model and any preprocessors"""
-    try:
-        # Try to load the model
-        model = joblib.load("best_xgb_model.pkl")
-        model = patch_xgb_model(model)
-        
-        # Try to load preprocessors if they exist
-        try:
-            preprocessors = joblib.load("preprocessors.pkl")
-            return model, preprocessors
-        except:
-            return model, None
-            
-    except Exception as e:
-        st.error(f"Error loading model: {e}")
-        return None, None
-
-model, preprocessors = load_model_and_preprocessors()
-
-def preprocess_input(input_df):
-    """Preprocess input to match training format"""
-
-    try:
-
-        # Convert categorical variables to dummy variables
-        df = pd.get_dummies(input_df)
-
-        # Align columns with model features
-        if hasattr(model, "feature_names_in_"):
-
-            required_cols = model.feature_names_in_
-
-            for col in required_cols:
-                if col not in df.columns:
-                    df[col] = 0
-
-            df = df[required_cols]
-
-        return df
-
-    except Exception as e:
-        st.warning(f"Preprocessing warning: {e}")
-        return input_df
-
-def predict_income(input_df):
-    """Make prediction with proper preprocessing"""
-
-    try:
-
-        processed_df = preprocess_input(input_df.copy())
-
-        prediction = model.predict(processed_df)
-        probability = model.predict_proba(processed_df)
-
-        return prediction[0], probability[0]
-
-    except Exception as e:
-
-        st.error(f"Prediction error: {e}")
-        st.info("💡 Tip: Make sure all fields are filled correctly")
-
-        return None, None
-
-# ============================================
-# HEADER SECTION
+# HEADER
 # ============================================
 st.markdown("""
 <div class="main-header">
     <h1>💰 CharityML Donor Predictor</h1>
-    <p>Identify potential donors using machine learning</p>
+    <p>Help identify potential donors by predicting income levels using machine learning</p>
 </div>
 """, unsafe_allow_html=True)
 
 # ============================================
+# SIDEBAR - MODEL INFO
+# ============================================
+with st.sidebar:
+    st.image("https://img.icons8.com/color/96/000000/money--v1.png", width=100)
+    st.markdown("## 🎯 About the Model")
+    
+    st.markdown("""
+    <div class="card">
+        <h4>Model: XGBoost Classifier</h4>
+        <p>This model predicts whether an individual earns more than $50,000 per year based on demographic and employment data.</p>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    st.markdown("### 📊 Model Performance")
+    
+    col1, col2 = st.columns(2)
+    with col1:
+        st.metric("Accuracy", "87.4%", "+2.3%")
+        st.metric("Precision", "80.7%", "")
+    with col2:
+        st.metric("Recall", "66.5%", "")
+        st.metric("F1 Score", "0.73", "")
+    
+    st.markdown("### 🔑 Top Features")
+    st.info("""
+    1. Capital Gain
+    2. Marital Status
+    3. Age
+    4. Education Level
+    5. Hours per Week
+    """)
+    
+    st.markdown("---")
+    st.markdown("### 📁 Dataset Info")
+    st.markdown("""
+    - **Source:** UCI Adult Dataset
+    - **Records:** 45,222
+    - **Features:** 14
+    - **Target:** Income >$50K
+    """)
+
+# ============================================
 # MAIN CONTENT
 # ============================================
-col1, col2 = st.columns([2, 1], gap="large")
+col1, col2 = st.columns([2, 1])
 
 with col1:
     st.markdown("""
     <div class="form-section">
-        <h3>📋 Donor Profile Information</h3>
-        <p style="color: #666; font-size: 0.9rem;">Fill in the details below to predict donor potential</p>
+        <h3>👤 Enter Individual Information</h3>
     </div>
     """, unsafe_allow_html=True)
     
-    # Create two columns for form inputs
-    form_col1, form_col2 = st.columns(2)
+    # Create input form with columns
+    input_col1, input_col2, input_col3 = st.columns(3)
     
-    with form_col1:
-        age = st.slider(
-            "Age", 
-            min_value=18, 
-            max_value=100, 
-            value=35,
-            help="Select the person's age"
+    with input_col1:
+        age = st.number_input("Age", min_value=17, max_value=90, value=35, step=1)
+        
+        workclass = st.selectbox(
+            "Work Class",
+            ["Private", "Self-emp-not-inc", "Self-emp-inc", "Federal-gov",
+             "Local-gov", "State-gov", "Without-pay", "Never-worked"]
         )
         
+        education = st.selectbox(
+            "Education Level",
+            ["Preschool", "1st-4th", "5th-6th", "7th-8th", "9th", "10th",
+             "11th", "12th", "HS-grad", "Some-college", "Assoc-voc",
+             "Assoc-acdm", "Bachelors", "Masters", "Prof-school", "Doctorate"]
+        )
+        
+        education_num = st.number_input("Education Years", min_value=1, max_value=16, value=10, step=1)
+    
+    with input_col2:
         marital_status = st.selectbox(
             "Marital Status",
-            options=[
-                "Married-civ-spouse",
-                "Divorced",
-                "Never-married",
-                "Separated",
-                "Widowed",
-                "Married-spouse-absent",
-                "Married-AF-spouse"
-            ],
-            index=0,
-            help="Current marital status"
+            ["Never-married", "Married-civ-spouse", "Divorced",
+             "Married-spouse-absent", "Separated", "Married-AF-spouse", "Widowed"]
+        )
+        
+        occupation = st.selectbox(
+            "Occupation",
+            ["Tech-support", "Craft-repair", "Other-service", "Sales",
+             "Exec-managerial", "Prof-specialty", "Handlers-cleaners",
+             "Machine-op-inspct", "Adm-clerical", "Farming-fishing",
+             "Transport-moving", "Priv-house-serv", "Protective-serv", "Armed-Forces"]
         )
         
         relationship = st.selectbox(
             "Relationship",
-            options=[
-                "Wife",
-                "Own-child",
-                "Husband",
-                "Not-in-family",
-                "Other-relative",
-                "Unmarried"
-            ],
-            index=3,
-            help="Relationship status in family"
+            ["Husband", "Not-in-family", "Wife", "Own-child", "Unmarried", "Other-relative"]
         )
         
         race = st.selectbox(
             "Race",
-            options=[
-                "White",
-                "Black",
-                "Asian-Pac-Islander",
-                "Amer-Indian-Eskimo",
-                "Other"
-            ],
-            index=0,
-            help="Racial background"
-        )
-        
-        sex = st.radio(
-            "Sex", 
-            options=["Male", "Female"], 
-            horizontal=True,
-            index=0
-        )
-        
-        education_num = st.number_input(
-            "Education Years", 
-            min_value=1, 
-            max_value=16, 
-            value=10,
-            help="Total years of education completed"
-        )
-        
-        workclass = st.selectbox(
-            "Workclass",
-            options=[
-                "Private",
-                "Self-emp-not-inc",
-                "Self-emp-inc",
-                "Federal-gov",
-                "Local-gov",
-                "State-gov",
-                "Without-pay",
-                "Never-worked"
-            ],
-            index=0,
-            help="Type of employment"
+            ["White", "Black", "Asian-Pac-Islander", "Amer-Indian-Eskimo", "Other"]
         )
     
-    with form_col2:
-        occupation = st.selectbox(
-            "Occupation",
-            options=[
-                "Tech-support",
-                "Craft-repair",
-                "Other-service",
-                "Sales",
-                "Exec-managerial",
-                "Prof-specialty",
-                "Handlers-cleaners",
-                "Machine-op-inspct",
-                "Adm-clerical",
-                "Farming-fishing",
-                "Transport-moving"
-            ],
-            index=4,
-            help="Current occupation"
-        )
+    with input_col3:
+        sex = st.selectbox("Sex", ["Male", "Female"])
         
-        hours_per_week = st.slider(
-            "Hours per week", 
-            min_value=1, 
-            max_value=99, 
-            value=40,
-            help="Average hours worked per week"
-        )
-        
-        education_level = st.selectbox(
-            "Education Level",
-            options=[
-                "Bachelors",
-                "HS-grad",
-                "11th",
-                "Masters",
-                "9th",
-                "Some-college",
-                "Assoc-acdm",
-                "Assoc-voc",
-                "7th-8th",
-                "Doctorate",
-                "Prof-school",
-                "5th-6th",
-                "10th",
-                "1st-4th",
-                "Preschool",
-                "12th"
-            ],
-            index=0,
-            help="Highest education level achieved"
-        )
+        capital_gain = st.number_input("Capital Gain", min_value=0, max_value=100000, value=0, step=100)
+        capital_loss = st.number_input("Capital Loss", min_value=0, max_value=5000, value=0, step=100)
+        hours_per_week = st.slider("Hours per Week", min_value=1, max_value=99, value=40)
         
         native_country = st.selectbox(
             "Native Country",
-            options=[
-                "United-States",
-                "Mexico",
-                "Philippines",
-                "Germany",
-                "Canada",
-                "India",
-                "Puerto-Rico",
-                "El-Salvador",
-                "Cuba",
-                "England",
-                "Jamaica",
-                "South",
-                "China",
-                "Italy",
-                "Dominican-Republic",
-                "Japan",
-                "Guatemala",
-                "Poland",
-                "Vietnam",
-                "Haiti"
-            ],
-            index=0,
-            help="Country of origin"
+            ["United-States", "Mexico", "Philippines", "Germany", "Canada",
+             "Puerto-Rico", "El-Salvador", "India", "Cuba", "England", "Jamaica",
+             "South", "China", "Italy", "Dominican-Republic", "Japan", "Guatemala",
+             "Poland", "Columbia", "Taiwan", "Vietnam", "Haiti", "Portugal",
+             "Iran", "Nicaragua", "Peru", "France", "Ireland", "Ecuador", "Thailand",
+             "Cambodia", "Hong", "Greece", "Trinadad&Tobago", "Laos", "Outlying-US(Guam-USVI-etc)",
+             "Yugoslavia", "Hungary", "Scotland", "Honduras", "Holand-Netherlands"]
         )
-        
-        capital_gain = st.number_input(
-            "Capital Gain", 
-            min_value=0, 
-            max_value=100000, 
-            value=0,
-            step=100,
-            help="Income from investments"
-        )
-        
-        capital_loss = st.number_input(
-            "Capital Loss", 
-            min_value=0, 
-            max_value=5000, 
-            value=0,
-            step=100,
-            help="Losses from investments"
-        )
-
-    st.markdown("<br>", unsafe_allow_html=True)
     
-    if st.button("🔮 Predict Donor Potential", use_container_width=True):
-        # Create input dataframe
-        input_data = pd.DataFrame([[
-            age,
-            workclass,
-            education_level,
-            education_num,
-            marital_status,
-            occupation,
-            relationship,
-            race,
-            sex.lower(),  # Convert to lowercase to match training data
-            capital_gain,
-            capital_loss,
-            hours_per_week,
-            native_country
-        ]], columns=[
-            "age",
-            "workclass",
-            "education_level",
-            "education-num",
-            "marital-status",
-            "occupation",
-            "relationship",
-            "race",
-            "sex",
-            "capital-gain",
-            "capital-loss",
-            "hours-per-week",
-            "native-country"
-        ])
-        
-        # Show loading spinner
-        with st.spinner("Analyzing donor profile..."):
-            prediction, probability = predict_income(input_data)
-        
-        if prediction is not None:
-            # Create a nice result display
-            result_col1, result_col2 = st.columns([1, 2])
-            
-            with result_col1:
-                if prediction == 1:
+    # Prediction button
+    if st.button("🔮 Predict Income Level", use_container_width=True):
+        if model_pipeline is None:
+            st.error("Model not loaded. Please check the model file.")
+        else:
+            with st.spinner("Analyzing data... Making prediction..."):
+                try:
+                    # Create input dataframe with proper formatting (add spaces before categories)
+                    input_data = pd.DataFrame({
+                        'age': [age],
+                        'workclass': [f" {workclass}"],
+                        'education_level': [f" {education}"],
+                        'education-num': [education_num],
+                        'marital-status': [f" {marital_status}"],
+                        'occupation': [f" {occupation}"],
+                        'relationship': [f" {relationship}"],
+                        'race': [f" {race}"],
+                        'sex': [f" {sex}"],
+                        'capital-gain': [capital_gain],
+                        'capital-loss': [capital_loss],
+                        'hours-per-week': [hours_per_week],
+                        'native-country': [f" {native_country}"]
+                    })
+                    
+                    # Make prediction using the pipeline
+                    prediction = model_pipeline.predict(input_data)[0]
+                    probability = model_pipeline.predict_proba(input_data)[0]
+                    
+                    # Display results
+                    st.markdown("---")
+                    result_col1, result_col2 = st.columns(2)
+                    
+                    with result_col1:
+                        st.markdown("""
+                        <div class="info-box">
+                            <h4>📋 Input Summary</h4>
+                        </div>
+                        """, unsafe_allow_html=True)
+                        
+                        summary_df = pd.DataFrame({
+                            'Feature': ['Age', 'Education', 'Hours/Week', 'Capital Gain'],
+                            'Value': [age, education, hours_per_week, f"${capital_gain:,}"]
+                        })
+                        st.dataframe(summary_df, use_container_width=True, hide_index=True)
+                    
+                    with result_col2:
+                        if prediction == 1:
+                            st.success(f"""
+                            ### 🎯 Likely Donor
+                            **Confidence:** {probability[1]*100:.1f}%
+                            """)
+                            st.balloons()
+                        else:
+                            st.error(f"""
+                            ### ❌ Not a Donor
+                            **Confidence:** {probability[0]*100:.1f}%
+                            """)
+                    
+                    # Display probability gauge
+                    st.markdown("### Prediction Confidence")
+                    confidence = float(max(probability))
+                    st.progress(confidence)
+                    st.write(f"Confidence: {confidence*100:.1f}%")
+                    
+                    # Additional insights
                     st.markdown("""
-                    <div style="text-align: center; padding: 1rem;">
-                        <span style="font-size: 4rem;">🎉</span>
+                    <div class="info-box">
+                        <strong>📊 Insight:</strong> This prediction is based on income levels. 
+                        'Likely Donor' indicates income >$50K, 'Not a Donor' indicates income ≤$50K.
                     </div>
                     """, unsafe_allow_html=True)
-                else:
-                    st.markdown("""
-                    <div style="text-align: center; padding: 1rem;">
-                        <span style="font-size: 4rem;">💔</span>
-                    </div>
-                    """, unsafe_allow_html=True)
-            
-            with result_col2:
-                if prediction == 1:
-                    st.success(f"""
-                    ### 🎯 Likely Donor
-                    **Confidence:** {probability[1]*100:.1f}%
-                    """)
-                    st.balloons()
-                else:
-                    st.error(f"""
-                    ### ❌ Not a Donor
-                    **Confidence:** {probability[0]*100:.1f}%
-                    """)
-            
-            # Display probability gauge
-            st.markdown("### Prediction Confidence")
-            prob_value = probability[1] if prediction == 1 else probability[0]
-            confidence = float(max(probability))
-            st.progress(confidence)
-            st.write(f"Confidence: {confidence*100:.1f}%")
-            
-            # Additional insights
-            st.markdown("""
-            <div class="info-box">
-                <strong>📊 Insight:</strong> This prediction is based on income levels. 
-                'Likely Donor' indicates income >$50K, 'Not a Donor' indicates income ≤$50K.
-            </div>
-            """, unsafe_allow_html=True)
+                    
+                except Exception as e:
+                    st.error(f"Error making prediction: {str(e)}")
+                    st.write("Debug info:", str(e))
 
 with col2:
     st.markdown("""
